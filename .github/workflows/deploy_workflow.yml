@@ -35,10 +35,21 @@ jobs:
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
             sudo apt-get update -y
-            sudo apt-get install -y docker.io docker-compose
+            sudo apt-get install -y docker.io docker-compose curl
             sudo usermod -aG docker $USER || true
             sudo mkdir -p ${{ secrets.DEPLOY_PATH }}
+            sudo mkdir -p ${{ secrets.BACKUP_PATH }}
             sudo chown -R $USER:$USER ${{ secrets.DEPLOY_PATH }}
+            sudo chown -R $USER:$USER ${{ secrets.BACKUP_PATH }}
+          EOF
+
+      - name: Backup current images
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+            for svc in $(docker compose -f ${{ secrets.DEPLOY_PATH }}/docker-compose.yml config --services); do
+              img=$(docker compose -f ${{ secrets.DEPLOY_PATH }}/docker-compose.yml ps -q $svc | xargs docker inspect --format='{{.Config.Image}}')
+              echo "$img" > "${{ secrets.BACKUP_PATH }}/${svc}_image_backup"
+            done
           EOF
 
       - name: Copy files to remote server
@@ -53,3 +64,26 @@ jobs:
             docker-compose pull || true
             docker-compose up -d --build
           EOF
+
+      - name: Health check
+        run: |
+          sleep 10
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${{ secrets.SSH_HOST }}:${{ secrets.SERVICE_PORT || '80' }})
+          if [ "$STATUS" -ne 200 ]; then
+            echo "Health check failed with status $STATUS"
+            echo "Rollback is commented out during testing."
+            # ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+            #   cd ${{ secrets.DEPLOY_PATH }}
+            #   docker-compose down || true
+            #   for f in ./*_image_backup; do
+            #     svc=$(basename $f | sed 's/.image_backup//')
+            #     img=$(cat $f)
+            #     if [ -n "$img" ]; then
+            #       docker pull $img || true
+            #       docker tag $img $svc:latest || true
+            #     fi
+            #   done
+            #   docker-compose up -d
+            # EOF
+            exit 1
+          fi
