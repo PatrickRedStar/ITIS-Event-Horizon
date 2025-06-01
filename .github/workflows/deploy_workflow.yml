@@ -22,10 +22,6 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
 
-  prepare-server:
-    runs-on: ubuntu-latest
-    needs: setup
-    steps:
       - name: Prepare remote environment with Docker Compose v2
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
@@ -45,7 +41,7 @@ jobs:
 
   backup:
     runs-on: ubuntu-latest
-    needs: prepare-server
+    needs: setup
     steps:
       - name: Backup current images
         run: |
