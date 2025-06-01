@@ -105,8 +105,12 @@ jobs:
         run: |
           sleep 10
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${{ secrets.SSH_HOST }}:${{ secrets.SERVICE_PORT || '80' }})
-          echo "STATUS=$STATUS" >> $GITHUB_OUTPUT
-          if [ "$STATUS" -eq 200 ]; then
+          CURL_EXIT=$?
+
+          if [ "$CURL_EXIT" -ne 0 ]; then
+            echo "curl failed with exit code $CURL_EXIT"
+            echo "result=fail" >> $GITHUB_OUTPUT
+          elif [ "$STATUS" -eq 200 ]; then
             echo "result=pass" >> $GITHUB_OUTPUT
           else
             echo "result=fail" >> $GITHUB_OUTPUT
