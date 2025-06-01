@@ -75,7 +75,7 @@ jobs:
             ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
               cd ${{ secrets.DEPLOY_PATH }}
               docker-compose restart
-            EOF
+          EOF
             sleep 10
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${{ secrets.SSH_HOST }}:${{ secrets.SERVICE_PORT || '80' }})
             if [ "$STATUS" -ne 200 ]; then
