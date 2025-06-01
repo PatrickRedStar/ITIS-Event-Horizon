@@ -111,11 +111,11 @@ jobs:
         run: |
           mkdir -p /opt/logs
           for svc in $(ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "cd ${{ secrets.DEPLOY_PATH }} && docker compose config --services"); do
-            ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "cd ${{ secrets.DEPLOY_PATH }} && docker compose logs $svc" > logs/${svc}.log || true
+            ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "cd ${{ secrets.DEPLOY_PATH }} && docker compose logs $svc" > /opt/logs/${svc}.log || true
           done
 
       - name: Upload logs as artifact
         uses: actions/upload-artifact@v4
         with:
           name: docker-service-logs
-          path: logs/
+          path: /opt/logs/
