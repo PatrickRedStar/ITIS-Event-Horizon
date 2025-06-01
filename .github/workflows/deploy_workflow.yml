@@ -106,7 +106,7 @@ jobs:
           attempt() {
             echo "Sleeping $1s..."
             sleep $1
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://${{ secrets.SSH_HOST }}:${{ secrets.SERVICE_PORT || '80' }})
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://${{ secrets.SSH_HOST }})
             CURL_EXIT=$?
             echo "Attempt after $1s: STATUS=$STATUS, CURL_EXIT=$CURL_EXIT"
             if [ "$CURL_EXIT" -eq 0 ] && [ "$STATUS" -eq 200 ]; then
@@ -149,7 +149,7 @@ jobs:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
       - name: Retry health check and rollback if still failing
         run: |
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://${{ secrets.SSH_HOST }}:${{ secrets.SERVICE_PORT || '80' }})
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://${{ secrets.SSH_HOST }})
           if [ "$STATUS" -ne 200 ]; then
             echo "Rollback initiated. Status: $STATUS"
             ssh $SSH_OPTIONS ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
