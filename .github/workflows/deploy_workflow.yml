@@ -1,0 +1,47 @@
+name: deploy_workflow.yml
+
+on:
+  pull_request:
+    branches:
+      - '**'
+
+jobs:
+  test-deploy:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Prepare remote environment (optional for new servers)
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+            sudo apt-get update -y
+            sudo apt-get install -y docker.io docker-compose
+            sudo usermod -aG docker $USER || true
+            mkdir -p ${{ secrets.DEPLOY_PATH }}
+          EOF
+
+      - name: Copy files to remote server
+        run: |
+          rsync -az --exclude='.git' ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}
+
+      - name: Deploy application (docker-compose)
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+            cd ${{ secrets.DEPLOY_PATH }}
+            docker-compose down --remove-orphans || true
+            docker-compose pull || true
+            docker-compose up -d --build
+          EOF
