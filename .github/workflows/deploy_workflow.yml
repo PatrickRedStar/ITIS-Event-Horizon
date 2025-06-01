@@ -5,14 +5,16 @@ on:
     branches:
       - '**'
 
+env:
+  SSH_OPTIONS: -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
+
 jobs:
   setup:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - &checkout
         uses: actions/checkout@v4
-
-      - name: Set up SSH key
+      - &ssh-agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
@@ -21,9 +23,11 @@ jobs:
     runs-on: ubuntu-latest
     needs: setup
     steps:
+      - *checkout
+      - *ssh-agent
       - name: Prepare remote environment with Docker Compose v2
         run: |
-          ssh -o StrictHostKeyChecking=no  ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+          ssh $SSH_OPTIONS ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
             sudo apt-get update -y
             sudo apt-get install -y docker.io curl
             DOCKER_CONFIG=${DOCKER_CONFIG:-$HOME/.docker}
@@ -42,9 +46,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: prepare-server
     steps:
+      - *ssh-agent
       - name: Backup current images
         run: |
-          ssh -o StrictHostKeyChecking=no  ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+          ssh $SSH_OPTIONS ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
             for svc in $(docker compose -f ${{ secrets.DEPLOY_PATH }}/docker-compose.yml config --services); do
               img=$(docker compose -f ${{ secrets.DEPLOY_PATH }}/docker-compose.yml ps -q $svc | xargs docker inspect --format='{{.Config.Image}}')
               echo "$img" > "${{ secrets.BACKUP_PATH }}/${svc}_image_backup"
@@ -55,13 +60,14 @@ jobs:
     runs-on: ubuntu-latest
     needs: backup
     steps:
+      - *checkout
+      - *ssh-agent
       - name: Copy files to remote server
         run: |
-          rsync -az -e "ssh -o StrictHostKeyChecking=no " --exclude='.git' ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}
-
+          rsync -az -e "ssh $SSH_OPTIONS" --exclude='.git' ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}
       - name: Deploy application
         run: |
-          ssh -o StrictHostKeyChecking=no  ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+          ssh $SSH_OPTIONS ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
             cd ${{ secrets.DEPLOY_PATH }}
             docker compose down --remove-orphans || true
             docker compose pull || true
@@ -72,6 +78,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: deploy
     steps:
+      - *ssh-agent
       - name: Health check and restart if needed
         run: |
           sleep 10
@@ -79,7 +86,7 @@ jobs:
           if [ "$STATUS" -ne 200 ]; then
             echo "Initial health check failed with status $STATUS"
             echo "Trying to restart the app once more..."
-            ssh -o StrictHostKeyChecking=no  ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+            ssh $SSH_OPTIONS ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
               cd ${{ secrets.DEPLOY_PATH }}
               docker compose restart
             EOF
@@ -88,7 +95,7 @@ jobs:
             if [ "$STATUS" -ne 200 ]; then
               echo "Retry health check failed with status $STATUS"
               echo "Rollback is commented out during testing."
-              ssh -o StrictHostKeyChecking=no  ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+              ssh $SSH_OPTIONS ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
                 cd ${{ secrets.DEPLOY_PATH }}
                 docker compose down || true
                 for f in ${{ secrets.BACKUP_PATH }}/*_image_backup; do
@@ -113,13 +120,13 @@ jobs:
     runs-on: ubuntu-latest
     needs: health-check
     steps:
+      - *ssh-agent
       - name: Collect container logs
         run: |
           mkdir -p logs
-          for svc in $(ssh -o StrictHostKeyChecking=no  ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "cd ${{ secrets.DEPLOY_PATH }} && docker compose config --services"); do
-            ssh -o StrictHostKeyChecking=no  ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "cd ${{ secrets.DEPLOY_PATH }} && docker compose logs $svc" > logs/${svc}.log || true
+          for svc in $(ssh $SSH_OPTIONS ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "cd ${{ secrets.DEPLOY_PATH }} && docker compose config --services"); do
+            ssh $SSH_OPTIONS ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "cd ${{ secrets.DEPLOY_PATH }} && docker compose logs $svc" > logs/${svc}.log || true
           done
-
       - name: Upload logs as artifact
         uses: actions/upload-artifact@v4
         with:
