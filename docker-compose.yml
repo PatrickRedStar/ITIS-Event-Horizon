@@ -1,22 +1,55 @@
+version: '3.8'
+
 services:
+  nginx-proxy:
+    image: jwilder/nginx-proxy
+    container_name: nginx-proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /etc/nginx/certs
+      - /etc/nginx/vhost.d
+      - /usr/share/nginx/html
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+    networks:
+      - event-horizon
+    restart: unless-stopped
+
+  nginx-letsencrypt:
+    image: jrcs/letsencrypt-nginx-proxy-companion
+    container_name: nginx-letsencrypt
+    environment:
+      - DEFAULT_EMAIL=you@example.com
+    volumes_from:
+      - nginx-proxy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - event-horizon
+    restart: unless-stopped
 
   app:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: horizon-app
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
     environment:
       - DB_HOST=event-horizon-db
       - DB_PORT=5432
       - MINIO_HOST=minio
       - MINIO_PORT=9000
+      - VIRTUAL_HOST=event.bikini-bottom.com
+      - LETSENCRYPT_HOST=event.bikini-bottom.com
+      - LETSENCRYPT_EMAIL=you@example.com
     depends_on:
       - postgres
       - minio
     networks:
       - event-horizon
+    restart: unless-stopped
 
   postgres:
     image: postgres:latest
