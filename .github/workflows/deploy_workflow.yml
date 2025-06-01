@@ -23,7 +23,7 @@ jobs:
     steps:
       - name: Prepare remote environment with Docker Compose v2
         run: |
-          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+          ssh -o StrictHostKeyChecking=no  ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
             sudo apt-get update -y
             sudo apt-get install -y docker.io curl
             DOCKER_CONFIG=${DOCKER_CONFIG:-$HOME/.docker}
@@ -44,7 +44,7 @@ jobs:
     steps:
       - name: Backup current images
         run: |
-          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+          ssh -o StrictHostKeyChecking=no  ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
             for svc in $(docker compose -f ${{ secrets.DEPLOY_PATH }}/docker-compose.yml config --services); do
               img=$(docker compose -f ${{ secrets.DEPLOY_PATH }}/docker-compose.yml ps -q $svc | xargs docker inspect --format='{{.Config.Image}}')
               echo "$img" > "${{ secrets.BACKUP_PATH }}/${svc}_image_backup"
@@ -57,11 +57,11 @@ jobs:
     steps:
       - name: Copy files to remote server
         run: |
-          rsync -az -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" --exclude='.git' ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}
+          rsync -az -e "ssh -o StrictHostKeyChecking=no " --exclude='.git' ./ ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}
 
       - name: Deploy application
         run: |
-          ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+          ssh -o StrictHostKeyChecking=no  ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
             cd ${{ secrets.DEPLOY_PATH }}
             docker compose down --remove-orphans || true
             docker compose pull || true
@@ -79,7 +79,7 @@ jobs:
           if [ "$STATUS" -ne 200 ]; then
             echo "Initial health check failed with status $STATUS"
             echo "Trying to restart the app once more..."
-            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+            ssh -o StrictHostKeyChecking=no  ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
               cd ${{ secrets.DEPLOY_PATH }}
               docker compose restart
             EOF
@@ -88,7 +88,7 @@ jobs:
             if [ "$STATUS" -ne 200 ]; then
               echo "Retry health check failed with status $STATUS"
               echo "Rollback is commented out during testing."
-              ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+              ssh -o StrictHostKeyChecking=no  ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
                 cd ${{ secrets.DEPLOY_PATH }}
                 docker compose down || true
                 for f in ${{ secrets.BACKUP_PATH }}/*_image_backup; do
@@ -116,8 +116,8 @@ jobs:
       - name: Collect container logs
         run: |
           mkdir -p logs
-          for svc in $(ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "cd ${{ secrets.DEPLOY_PATH }} && docker compose config --services"); do
-            ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "cd ${{ secrets.DEPLOY_PATH }} && docker compose logs $svc" > logs/${svc}.log || true
+          for svc in $(ssh -o StrictHostKeyChecking=no  ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "cd ${{ secrets.DEPLOY_PATH }} && docker compose config --services"); do
+            ssh -o StrictHostKeyChecking=no  ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "cd ${{ secrets.DEPLOY_PATH }} && docker compose logs $svc" > logs/${svc}.log || true
           done
 
       - name: Upload logs as artifact
