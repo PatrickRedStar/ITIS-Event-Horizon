@@ -20,7 +20,7 @@ services:
     image: jrcs/letsencrypt-nginx-proxy-companion
     container_name: nginx-letsencrypt
     environment:
-      - DEFAULT_EMAIL=you@example.com
+      - DEFAULT_EMAIL=peterkurkin1@gmail.com
     volumes_from:
       - nginx-proxy
     volumes:
@@ -43,7 +43,7 @@ services:
       - MINIO_PORT=9000
       - VIRTUAL_HOST=event.bikini-bottom.com
       - LETSENCRYPT_HOST=event.bikini-bottom.com
-      - LETSENCRYPT_EMAIL=you@example.com
+      - LETSENCRYPT_EMAIL=peterkurkin1@gmail.com
     depends_on:
       - postgres
       - minio
