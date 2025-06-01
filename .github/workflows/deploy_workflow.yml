@@ -14,6 +14,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Show key variables (debug)
+        run: |
+          echo "HOST: ${{ secrets.SSH_HOST }}"
+          echo "USER: ${{ secrets.SSH_USER }}"
+          echo "DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}"
+          echo "KEY PRESENT: ${{ secrets.SSH_PRIVATE_KEY != '' }}"
+
       - name: Set up SSH key
         uses: webfactory/ssh-agent@v0.9.0
         with:
