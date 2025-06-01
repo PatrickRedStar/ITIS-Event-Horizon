@@ -70,20 +70,47 @@ jobs:
           sleep 10
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${{ secrets.SSH_HOST }}:${{ secrets.SERVICE_PORT || '80' }})
           if [ "$STATUS" -ne 200 ]; then
-            echo "Health check failed with status $STATUS"
-            echo "Rollback is commented out during testing."
-            # ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
-            #   cd ${{ secrets.DEPLOY_PATH }}
-            #   docker-compose down || true
-            #   for f in ./*_image_backup; do
-            #     svc=$(basename $f | sed 's/.image_backup//')
-            #     img=$(cat $f)
-            #     if [ -n "$img" ]; then
-            #       docker pull $img || true
-            #       docker tag $img $svc:latest || true
-            #     fi
-            #   done
-            #   docker-compose up -d
-            # EOF
-            exit 1
+            echo "Initial health check failed with status $STATUS"
+            echo "Trying to restart the app once more..."
+            ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+              cd ${{ secrets.DEPLOY_PATH }}
+              docker-compose restart
+            EOF
+            sleep 10
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${{ secrets.SSH_HOST }}:${{ secrets.SERVICE_PORT || '80' }})
+            if [ "$STATUS" -ne 200 ]; then
+              echo "Retry health check failed with status $STATUS"
+              echo "Rollback is commented out during testing."
+              # ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+              #   cd ${{ secrets.DEPLOY_PATH }}
+              #   docker-compose down || true
+              #   for f in ${{ secrets.BACKUP_PATH }}/*_image_backup; do
+              #     svc=$(basename $f | sed 's/.image_backup//')
+              #     img=$(cat $f)
+              #     if [ -n "$img" ]; then
+              #       docker pull $img || true
+              #       docker tag $img $svc:latest || true
+              #     fi
+              #   done
+              #   docker-compose up -d
+              # EOF
+              exit 1
+            else
+              echo "Service recovered after restart. Health check passed with status $STATUS"
+            fi
+          else
+            echo "Health check passed successfully with status $STATUS"
           fi
+
+      - name: Collect container logs
+        run: |
+          mkdir -p /opt/logs
+          for svc in $(ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "cd ${{ secrets.DEPLOY_PATH }} && docker compose config --services"); do
+            ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "cd ${{ secrets.DEPLOY_PATH }} && docker compose logs --since=60s $svc" > logs/${svc}.log || true
+          done
+
+      - name: Upload logs as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-service-logs
+          path: logs/
